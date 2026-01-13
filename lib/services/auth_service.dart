@@ -37,7 +37,21 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
-    await _auth.signOut();
+    try {
+      print('🔄 Starting sign out process...');
+
+      // On web, GoogleSignIn.signOut() requires a Client ID, so skip it
+      if (!kIsWeb) {
+        await _googleSignIn.signOut();
+        print('✅ Google Sign-In signed out');
+      }
+
+      await _auth.signOut();
+      print('✅ Firebase Auth signed out successfully');
+    } catch (e, stackTrace) {
+      print('❌ ERROR signing out: $e');
+      print('📋 Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 }

@@ -92,7 +92,16 @@ class _HomeScreenState extends State<HomeScreen> {
               const PopupMenuDivider(),
               PopupMenuItem(
                 onTap: () async {
-                  await widget.authService.signOut();
+                  try {
+                    await widget.authService.signOut();
+                  } catch (e) {
+                    print('❌ ERROR in logout popup: $e');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Logout failed: $e')),
+                      );
+                    }
+                  }
                 },
                 child: const Row(
                   children: [
