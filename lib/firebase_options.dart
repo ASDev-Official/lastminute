@@ -51,18 +51,19 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyDfhB8GQNW6ULJIpME-ig3CRYVL1dyqios',
-    appId: '1:721938208549:web:635ca979585cd86c492ccc',
+    appId: '1:721938208549:web:642d385ad4ad67eb492ccc',
     messagingSenderId: '721938208549',
     projectId: 'asdev-school-lastminute',
-    authDomain: 'lastminute-auth.aadish.dev',
+    authDomain: 'asdev-school-lastminute.firebaseapp.com',
     storageBucket: 'asdev-school-lastminute.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDyqIoS9rFo_yFnxCu5WVLbMK0O6dbARgU',
-    appId: '1:721938208549:android:afa0b3d10f736dd5492ccc',
+    appId: '1:721938208549:android:7fa10eb455da5c27492ccc',
     messagingSenderId: '721938208549',
     projectId: 'asdev-school-lastminute',
     storageBucket: 'asdev-school-lastminute.firebasestorage.app',
   );
+
 }

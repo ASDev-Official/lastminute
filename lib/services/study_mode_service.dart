@@ -42,6 +42,18 @@ class StudyModeService {
     'com.android.mms',
     'com.android.vending', // Play Store
     'com.google.android.gms',
+    'com.google.android.googlequicksearchbox', // Google Search
+    'com.android.chrome',
+    'android',
+    'com.sec.', // Samsung system apps prefix
+    'com.samsung.', // Samsung apps prefix
+    'com.google.android.inputmethod', // Keyboard
+    'com.android.inputmethod', // Keyboard
+    'com.android.documentsui', // File manager
+    'com.android.providers',
+    'com.android.server',
+    'com.android.keychain',
+    'com.google.android.packageinstaller',
   ];
 
   // Social media & distracting apps that cannot be allowed
@@ -144,13 +156,17 @@ class StudyModeService {
 
   // Check if an app is allowed
   bool isAppAllowed(String packageName) {
-    // Always allow our app
-    if (packageName.contains('lastminute')) return true;
+    final lowerPackage = packageName.toLowerCase();
 
-    // Always allow system apps
-    if (_systemApps.any(
-      (sys) => packageName.toLowerCase().contains(sys.toLowerCase()),
-    )) {
+    // Always allow our app
+    if (lowerPackage.contains('lastminute')) return true;
+
+    // Always allow system apps (check if package starts with any system app prefix)
+    if (_systemApps.any((sys) {
+      final lowerSys = sys.toLowerCase();
+      return lowerPackage.startsWith(lowerSys) ||
+          lowerPackage.contains(lowerSys);
+    })) {
       return true;
     }
 
