@@ -36,7 +36,7 @@ A beautiful, feature-rich homework reminder app built with Flutter and Firebase,
 ### 🎨 Beautiful UI/UX
 
 - **Material Design 3** - Modern, polished interface
-- **Teal Theme** - Fresh, modern color scheme (no indigo!)
+- **Teal Theme** - Fresh, modern color scheme
 - **Light & Dark Mode** - Automatic theme switching
 - **Smooth Animations** - Predictive back gestures and page transitions
 - **Adaptive Design** - Optimized for Android, web, iOS, and desktop
