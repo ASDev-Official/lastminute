@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "721938208549",
+    "project_id": "asdev-school-lastminute",
+    "storage_bucket": "asdev-school-lastminute.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:721938208549:android:afa0b3d10f736dd5492ccc",
+        "android_client_info": {
+          "package_name": "com.example.lastminute"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "721938208549-a2tm815dkdftc31il64790idctm21igj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyqIoS9rFo_yFnxCu5WVLbMK0O6dbARgU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "721938208549-a2tm815dkdftc31il64790idctm21igj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
