@@ -244,7 +244,7 @@ class StudyModeService {
         if (usage.isNotEmpty) {
           // Get the most recently used app
           final recentApp = usage.reduce(
-            (a, b) => a.endDate!.isAfter(b.endDate!) ? a : b,
+            (a, b) => a.endDate.isAfter(b.endDate) ? a : b,
           );
 
           final packageName = recentApp.packageName;
