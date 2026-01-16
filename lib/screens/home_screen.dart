@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/homework.dart';
 import '../services/auth_service.dart';
@@ -10,7 +11,7 @@ import '../widgets/homework_card.dart';
 import '../widgets/stats_card.dart';
 import 'calendar_screen.dart';
 import 'homework_detail_screen.dart';
-import 'study_mode_screen.dart';
+import 'launcher_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -18,11 +19,13 @@ class HomeScreen extends StatefulWidget {
     required this.user,
     required this.authService,
     required this.githubService,
+    this.showLauncherButton = false,
   });
 
   final User user;
   final AuthService authService;
   final GithubService githubService;
+  final bool showLauncherButton;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -70,6 +73,76 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _returnToLauncher() async {
+    try {
+      // Navigate back to home (launcher)
+      SystemNavigator.pop();
+    } catch (e) {
+      print('Error returning to launcher: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to return to launcher: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openFocusMode() async {
+    const platform = MethodChannel('com.lastminute/launcher');
+    try {
+      final isDefault = await platform.invokeMethod('isDefaultLauncher');
+      if (isDefault == true) {
+        // Already set as launcher, navigate to launcher screen
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LauncherScreen()),
+          );
+        }
+      } else {
+        // Not set as launcher, show prompt
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Set LastMinute as Launcher'),
+              content: const Text(
+                'To use Focus Mode, you need to set LastMinute as your default launcher. This allows the app to control which apps you can access during study sessions.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    try {
+                      await platform.invokeMethod('openLauncherSettings');
+                    } catch (e) {
+                      print('Error opening launcher settings: $e');
+                    }
+                  },
+                  child: const Text('Open Settings'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error checking launcher status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -111,13 +184,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           size: 28,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'LastMinute',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        const Flexible(
+                          child: Text(
+                            'LastMinute',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
                     actions: [
+                      if (widget.showLauncherButton)
+                        IconButton(
+                          tooltip: 'Return to Launcher',
+                          onPressed: _returnToLauncher,
+                          icon: const Icon(Icons.home_rounded),
+                        ),
                       IconButton(
                         tooltip: 'Calendar',
                         onPressed: () {
@@ -131,15 +213,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         icon: const Icon(Icons.calendar_today_rounded),
                       ),
                       IconButton(
-                        tooltip: 'Study Mode',
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const StudyModeScreen(),
-                            ),
-                          );
-                        },
+                        tooltip: 'Focus Mode',
+                        onPressed: _openFocusMode,
                         icon: const Icon(Icons.psychology_rounded),
                       ),
                       PopupMenuButton<int>(
@@ -227,13 +302,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               Icon(Icons.schedule, color: colorScheme.primary, size: 28),
               const SizedBox(width: 8),
-              const Text(
-                'LastMinute',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              const Flexible(
+                child: Text(
+                  'LastMinute',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
           actions: [
+            if (widget.showLauncherButton)
+              IconButton(
+                tooltip: 'Return to Launcher',
+                onPressed: _returnToLauncher,
+                icon: const Icon(Icons.home_rounded),
+              ),
             IconButton(
               tooltip: 'Calendar',
               onPressed: () {
@@ -245,13 +329,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               icon: const Icon(Icons.calendar_today_rounded),
             ),
             IconButton(
-              tooltip: 'Study Mode',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const StudyModeScreen()),
-                );
-              },
+              tooltip: 'Focus Mode',
+              onPressed: _openFocusMode,
               icon: const Icon(Icons.psychology_rounded),
             ),
             PopupMenuButton<int>(
@@ -569,6 +648,75 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 leading: const Icon(Icons.description_outlined),
                 title: const Text('Because Deadlines Always Sneak Up'),
                 subtitle: const Text('Stay organized with homework reminders'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          color: Theme.of(context).colorScheme.errorContainer,
+          child: Column(
+            children: [
+              ListTile(
+                leading: Icon(
+                  Icons.emergency,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+                title: Text(
+                  'Emergency: Reset Launcher',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  'If stuck in focus mode, use this to change launcher',
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onErrorContainer.withOpacity(0.8),
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    const platform = MethodChannel('com.lastminute/launcher');
+                    try {
+                      await platform.invokeMethod('openLauncherSettings');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Launcher settings opened. Change your default launcher back to normal.',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.error,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.settings),
+                  label: const Text('Open Launcher Settings'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  ),
+                ),
               ),
             ],
           ),

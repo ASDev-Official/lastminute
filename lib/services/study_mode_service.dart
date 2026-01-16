@@ -8,6 +8,8 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'notification_service.dart';
 
 class StudyModeService {
   static final StudyModeService _instance = StudyModeService._internal();
@@ -23,6 +25,15 @@ class StudyModeService {
   List<String> _allowedApps = [];
   String? _lastForegroundApp;
   Function(String)? _onBlockedAppDetected;
+  bool _usageAccessRequested = false;
+  bool _hasUsageAccess = false;
+  Timer? _persistTimer;
+
+  // Persistence keys
+  static const String _sessionActiveKey = 'study_session_active';
+  static const String _sessionStartEpochKey = 'study_session_start_epoch_ms';
+  static const String _sessionDurationMsKey = 'study_session_duration_ms';
+  static const String _sessionRemainingMsKey = 'study_session_remaining_ms';
 
   bool get isStudyModeActive => _isStudyModeActive;
   bool get isSessionActive => _isSessionActive;
@@ -179,6 +190,8 @@ class StudyModeService {
     required Duration duration,
     required Function(String appName) onBlockedAppDetected,
     VoidCallback? onComplete,
+    Function()? onUsageAccessDenied,
+    Function()? onLauncherNotDefault,
   }) async {
     if (kIsWeb || !Platform.isAndroid) {
       print('⚠️ Study session not supported on this platform');
@@ -187,6 +200,47 @@ class StudyModeService {
 
     try {
       print('🎯 Starting study session for ${duration.inMinutes} minutes');
+
+      // Check usage access permission (only request once)
+      if (!_usageAccessRequested) {
+        _usageAccessRequested = true;
+
+        // Try to check if we have access
+        try {
+          final now = DateTime.now();
+          final oneSecondAgo = now.subtract(const Duration(seconds: 1));
+          await AppUsage().getAppUsage(oneSecondAgo, now);
+          _hasUsageAccess = true;
+          print('✅ Usage access granted');
+        } catch (e) {
+          print('⚠️ No usage access, requesting...');
+
+          // Request access using platform channel
+          const platform = MethodChannel('com.lastminute/permissions');
+          try {
+            final granted = await platform.invokeMethod('requestUsageAccess');
+            _hasUsageAccess = granted == true;
+
+            if (!_hasUsageAccess) {
+              print('❌ Usage access denied');
+              onUsageAccessDenied?.call();
+              _usageAccessRequested = false; // Allow retry next time
+              return;
+            }
+          } catch (e) {
+            print('❌ Error requesting usage access: $e');
+            onUsageAccessDenied?.call();
+            _usageAccessRequested = false;
+            return;
+          }
+        }
+      }
+
+      if (!_hasUsageAccess) {
+        print('❌ No usage access available');
+        onUsageAccessDenied?.call();
+        return;
+      }
 
       // Request overlay permission
       final hasPermission = await FlutterOverlayWindow.isPermissionGranted();
@@ -199,11 +253,43 @@ class StudyModeService {
         }
       }
 
+      // Check if app is default launcher and block if not
+      const platform = MethodChannel('com.lastminute/launcher');
+      try {
+        final isDefault = await platform.invokeMethod('isDefaultLauncher');
+        if (isDefault != true) {
+          print('⚠️ App is not default launcher. Blocking session start.');
+          onLauncherNotDefault?.call();
+          return;
+        }
+      } catch (e) {
+        print('⚠️ Could not verify launcher status: $e');
+        onLauncherNotDefault?.call();
+        return;
+      }
+
+      // Enable wakelock to keep screen on
+      try {
+        await WakelockPlus.enable();
+        print('✅ Screen wakelock enabled');
+      } catch (e) {
+        print('⚠️ Could not enable wakelock: $e');
+      }
+
       _isStudyModeActive = true;
       _isSessionActive = true;
       _studyStartTime = DateTime.now();
       _studyDuration = duration;
       _onBlockedAppDetected = onBlockedAppDetected;
+
+      // Persist initial session state
+      await _persistSessionState();
+
+      // Start persistence + notification updater
+      _startPersistenceTicker();
+      await NotificationService().showStudyOngoing(
+        remaining: getRemainingTime(),
+      );
 
       // Start completion timer
       _studyTimer?.cancel();
@@ -221,6 +307,13 @@ class StudyModeService {
       print('❌ ERROR starting study session: $e');
       _isStudyModeActive = false;
       _isSessionActive = false;
+
+      // Clean up on error
+      try {
+        await WakelockPlus.disable();
+      } catch (_) {}
+      // Stop notification if shown
+      await NotificationService().stopStudyOngoing().catchError((_) {});
     }
   }
 
@@ -288,7 +381,7 @@ class StudyModeService {
   }
 
   // Stop study session
-  void stopStudySession() {
+  Future<void> stopStudySession() async {
     print('🛑 Stopping study session');
 
     _isStudyModeActive = false;
@@ -301,6 +394,21 @@ class StudyModeService {
     _studyDuration = Duration.zero;
     _lastForegroundApp = null;
     _onBlockedAppDetected = null;
+
+    // Disable wakelock
+    WakelockPlus.disable().catchError((e) {
+      print('⚠️ Error disabling wakelock: $e');
+    });
+
+    // Reset usage access flag to allow requesting again in future sessions
+    _usageAccessRequested = false;
+    _hasUsageAccess = false;
+
+    // Stop persistence + notification
+    _persistTimer?.cancel();
+    _persistTimer = null;
+    await _clearSessionState();
+    await NotificationService().stopStudyOngoing().catchError((_) {});
 
     print('✅ Study session stopped');
   }
@@ -336,6 +444,71 @@ class StudyModeService {
     final elapsed = DateTime.now().difference(_studyStartTime!);
     final remaining = _studyDuration - elapsed;
     return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  // Load session state from storage (for launcher or app restarts)
+  Future<void> loadSessionFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final active = prefs.getBool(_sessionActiveKey) ?? false;
+      if (!active) return;
+
+      final startMs = prefs.getInt(_sessionStartEpochKey);
+      final durationMs = prefs.getInt(_sessionDurationMsKey);
+      if (startMs == null || durationMs == null) return;
+
+      _studyStartTime = DateTime.fromMillisecondsSinceEpoch(startMs);
+      _studyDuration = Duration(milliseconds: durationMs);
+      _isStudyModeActive = true;
+      _isSessionActive = true;
+    } catch (e) {
+      print('❌ ERROR loading session from storage: $e');
+    }
+  }
+
+  // Persist current session state
+  Future<void> _persistSessionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_sessionActiveKey, _isSessionActive);
+      await prefs.setInt(
+        _sessionStartEpochKey,
+        _studyStartTime?.millisecondsSinceEpoch ?? 0,
+      );
+      await prefs.setInt(_sessionDurationMsKey, _studyDuration.inMilliseconds);
+      await prefs.setInt(
+        _sessionRemainingMsKey,
+        getRemainingTime().inMilliseconds,
+      );
+    } catch (e) {
+      print('❌ ERROR persisting session state: $e');
+    }
+  }
+
+  Future<void> _clearSessionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_sessionActiveKey);
+      await prefs.remove(_sessionStartEpochKey);
+      await prefs.remove(_sessionDurationMsKey);
+      await prefs.remove(_sessionRemainingMsKey);
+    } catch (e) {
+      print('❌ ERROR clearing session state: $e');
+    }
+  }
+
+  void _startPersistenceTicker() {
+    _persistTimer?.cancel();
+    _persistTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!_isSessionActive) {
+        timer.cancel();
+        return;
+      }
+      await _persistSessionState();
+      await NotificationService().updateStudyOngoing(
+        remaining: getRemainingTime(),
+      );
+    });
   }
 
   // Get app usage stats (Android only)

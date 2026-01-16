@@ -12,6 +12,7 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  static const int _studyNotificationId = 1001;
 
   Future<void> initialize() async {
     if (kIsWeb) {
@@ -177,6 +178,68 @@ class NotificationService {
     );
   }
 
+  // Study session ongoing notification (Android)
+  Future<void> showStudyOngoing({required Duration remaining}) async {
+    if (kIsWeb) return;
+    try {
+      await _notifications.show(
+        _studyNotificationId,
+        'Focus Session',
+        _formatRemaining(remaining),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'study_session',
+            'Study Session',
+            channelDescription: 'Ongoing focus session status',
+            importance: Importance.low,
+            priority: Priority.low,
+            ongoing: true,
+            onlyAlertOnce: true,
+            category: AndroidNotificationCategory.progress,
+            showWhen: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ ERROR showing study ongoing notification: $e');
+    }
+  }
+
+  Future<void> updateStudyOngoing({required Duration remaining}) async {
+    if (kIsWeb) return;
+    try {
+      await _notifications.show(
+        _studyNotificationId,
+        'Focus Session',
+        _formatRemaining(remaining),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'study_session',
+            'Study Session',
+            channelDescription: 'Ongoing focus session status',
+            importance: Importance.low,
+            priority: Priority.low,
+            ongoing: true,
+            onlyAlertOnce: true,
+            category: AndroidNotificationCategory.progress,
+            showWhen: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ ERROR updating study ongoing notification: $e');
+    }
+  }
+
+  Future<void> stopStudyOngoing() async {
+    if (kIsWeb) return;
+    try {
+      await _notifications.cancel(_studyNotificationId);
+    } catch (e) {
+      print('❌ ERROR stopping study ongoing notification: $e');
+    }
+  }
+
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -190,5 +253,15 @@ class NotificationService {
     } else {
       return '${date.month}/${date.day}/${date.year}';
     }
+  }
+
+  String _formatRemaining(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    final timeStr = hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}'
+        : '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    return 'Remaining: $timeStr';
   }
 }

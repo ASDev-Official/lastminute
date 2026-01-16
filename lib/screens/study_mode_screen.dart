@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:installed_apps/app_info.dart';
 
 import '../services/study_mode_service.dart';
@@ -16,10 +17,14 @@ class StudyModeScreen extends StatefulWidget {
 class _StudyModeScreenState extends State<StudyModeScreen> {
   final StudyModeService _studyModeService = StudyModeService();
   Timer? _timer;
+  Timer? _burnInTimer;
   Duration _remainingTime = Duration.zero;
   int _selectedMinutes = 25; // Pomodoro default
+  int? _customMinutes;
   List<String> _allowedApps = [];
   bool _isLoading = false;
+  double _elementOffsetX = 0;
+  double _elementOffsetY = 0;
 
   @override
   void initState() {
@@ -33,6 +38,7 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _burnInTimer?.cancel();
     super.dispose();
   }
 
@@ -70,8 +76,10 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
         return;
       }
 
+      final minutes = _customMinutes ?? _selectedMinutes;
+
       await _studyModeService.startStudySession(
-        duration: Duration(minutes: _selectedMinutes),
+        duration: Duration(minutes: minutes),
         onBlockedAppDetected: (appName) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -88,13 +96,13 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
         },
         onComplete: () {
           if (mounted) {
+            _stopBurnInProtection();
             showDialog(
               context: context,
+              barrierDismissible: false,
               builder: (context) => AlertDialog(
                 title: const Text('🎉 Session Complete!'),
-                content: Text(
-                  'You studied for $_selectedMinutes minutes. Great job!',
-                ),
+                content: Text('You studied for $minutes minutes. Great job!'),
                 actions: [
                   FilledButton(
                     onPressed: () => Navigator.pop(context),
@@ -106,15 +114,85 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
             setState(() {});
           }
         },
+        onUsageAccessDenied: () {
+          if (mounted) {
+            _stopStudySession();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Usage access is required for focus sessions. Please grant permission and try again.',
+                ),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+        onLauncherNotDefault: () {
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text('Set LastMinute as Default Launcher'),
+                content: const Text(
+                  'To start a focus session, you must set LastMinute as your default launcher. Open Home settings and select LastMinute as your launcher.',
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      final platform = MethodChannel('com.lastminute/launcher');
+                      try {
+                        await platform.invokeMethod('openLauncherSettings');
+                      } catch (e) {
+                        print('Error: $e');
+                      }
+                    },
+                    child: const Text('Open Settings'),
+                  ),
+                ],
+              ),
+            );
+          }
+        },
       );
-      _startTimer();
-      setState(() {});
+      // Only start timer and UI updates if session actually started
+      if (_studyModeService.isSessionActive) {
+        _startTimer();
+        _startBurnInProtection();
+        setState(() {});
+      }
     }
   }
 
-  void _stopStudySession() {
-    _studyModeService.stopStudySession();
+  void _startBurnInProtection() {
+    _burnInTimer?.cancel();
+    _burnInTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted && _studyModeService.isSessionActive) {
+        setState(() {
+          // Move elements randomly within a small range to prevent burn-in
+          _elementOffsetX = (DateTime.now().millisecond % 20 - 10).toDouble();
+          _elementOffsetY = (DateTime.now().millisecond % 20 - 10).toDouble();
+        });
+      }
+    });
+  }
+
+  void _stopBurnInProtection() {
+    _burnInTimer?.cancel();
+    _burnInTimer = null;
+    setState(() {
+      _elementOffsetX = 0;
+      _elementOffsetY = 0;
+    });
+  }
+
+  void _stopStudySession() async {
+    await _studyModeService.stopStudySession();
     _timer?.cancel();
+    _stopBurnInProtection();
     setState(() {});
   }
 
@@ -197,40 +275,118 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Focus Session'),
-        actions: [
-          if (isActive)
-            IconButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Stop Session?'),
-                    content: const Text(
-                      'Are you sure you want to stop your study session?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _stopStudySession();
-                        },
-                        child: const Text('Stop'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              icon: const Icon(Icons.stop_circle_outlined),
+    // Dark theme with burn-in protection during active session
+    if (isActive) {
+      return PopScope(
+        canPop: false, // Prevent back navigation
+        child: Theme(
+          data: ThemeData.dark().copyWith(
+            scaffoldBackgroundColor: Colors.black,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.black,
+              elevation: 0,
             ),
-        ],
-      ),
+          ),
+          child: Scaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading: false, // Remove back button
+              title: const Text('Focus Session'),
+              actions: [
+                IconButton(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: Colors.grey[900],
+                        title: const Text(
+                          'Stop Session?',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        content: const Text(
+                          'Are you sure you want to stop your study session?',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _stopStudySession();
+                            },
+                            child: const Text('Stop'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.stop_circle_outlined),
+                ),
+              ],
+            ),
+            body: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  )
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Transform.translate(
+                        offset: Offset(_elementOffsetX, _elementOffsetY),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.timer,
+                              size: 80,
+                              color: Colors.white.withOpacity(0.7),
+                            ),
+                            const SizedBox(height: 32),
+                            Text(
+                              _formatDuration(_remainingTime),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 72,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white.withOpacity(0.9),
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'remaining',
+                              style: TextStyle(
+                                fontSize: 20,
+                                color: Colors.white.withOpacity(0.5),
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 48),
+                            Text(
+                              'FOCUS MODE',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white.withOpacity(0.3),
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      );
+    }
+
+    // Normal theme when not active
+    return Scaffold(
+      appBar: AppBar(title: const Text('Focus Session')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator.adaptive())
           : SingleChildScrollView(
@@ -356,6 +512,41 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
                         _buildDurationChip(120, 'Marathon'),
                       ],
                     ),
+                    const SizedBox(height: 16),
+
+                    // Custom Duration Input
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: InputDecoration(
+                              labelText: 'Custom Duration (minutes)',
+                              hintText: 'Enter minutes',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              prefixIcon: const Icon(Icons.edit_calendar),
+                            ),
+                            keyboardType: TextInputType.number,
+                            onChanged: (value) {
+                              final minutes = int.tryParse(value);
+                              setState(() {
+                                if (minutes != null && minutes > 0) {
+                                  _customMinutes = minutes;
+                                  _selectedMinutes = 0; // Deselect presets
+                                } else {
+                                  _customMinutes = null;
+                                  if (_selectedMinutes == 0) {
+                                    _selectedMinutes =
+                                        25; // Fallback to default
+                                  }
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 32),
                   ],
 
@@ -405,13 +596,16 @@ class _StudyModeScreenState extends State<StudyModeScreen> {
   }
 
   Widget _buildDurationChip(int minutes, String label) {
-    final isSelected = _selectedMinutes == minutes;
+    final isSelected = _selectedMinutes == minutes && _customMinutes == null;
     return FilterChip(
       selected: isSelected,
       label: Text('$minutes min\n$label'),
       onSelected: (selected) {
         if (selected) {
-          setState(() => _selectedMinutes = minutes);
+          setState(() {
+            _selectedMinutes = minutes;
+            _customMinutes = null;
+          });
         }
       },
     );
