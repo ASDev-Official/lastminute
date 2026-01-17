@@ -4,6 +4,19 @@
 
 A beautiful, feature-rich homework reminder app built with Flutter and Firebase, designed to help students stay on top of their assignments with style.
 
+## Join the Closed Test
+
+Want to try LastMinute on your Android device and help it get published on the Play Store faster? Follow these simple steps:
+
+1. **Join the Google Group**
+   - Visit <https://groups.google.com/g/asdev-testers>
+   - Join the testing group
+
+2. **Install from Play Store**
+   - Open the Play Store URL on your Android device: <https://play.google.com/store/apps/details?id=com.aadishsamir.lastminute>
+   - Tap "Install" to download the app
+   - Launch and log in to the app.
+
 ## ✨ Features
 
 ### 🎯 Core Features
