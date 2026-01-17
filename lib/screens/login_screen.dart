@@ -335,15 +335,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: const Icon(Icons.login),
                         label: const Text('Sign in with Google'),
                       ),
-
-                      const SizedBox(height: 12),
-                      Text(
-                        'On Android, Google Sign-In uses Credential Manager when available. On web, the default Google flow is used.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
                     ],
                   ),
                 ),
