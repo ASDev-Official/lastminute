@@ -79,6 +79,22 @@ class AuthService {
     }
   }
 
+  Future<void> updateDisplayName({required String displayName}) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('No user is currently signed in');
+      }
+      await user.updateDisplayName(displayName);
+      await user.reload();
+      print('✅ Display name updated to $displayName');
+    } catch (e, stackTrace) {
+      print('❌ ERROR updating display name: $e');
+      print('📋 Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
   Future<void> signOut() async {
     try {
       print('🔄 Starting sign out process...');

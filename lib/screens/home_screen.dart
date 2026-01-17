@@ -691,11 +691,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  widget.user.displayName ?? 'User',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.user.displayName ?? 'User',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20),
+                      onPressed: () => _showEditNameDialog(),
+                      tooltip: 'Edit name',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -798,6 +808,82 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showEditNameDialog() async {
+    final nameController = TextEditingController(
+      text: widget.user.displayName ?? '',
+    );
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Edit Name'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Display Name',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
+              ),
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a name';
+                }
+                return null;
+              },
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(context).pop();
+                  try {
+                    await widget.authService.updateDisplayName(
+                      displayName: nameController.text.trim(),
+                    );
+                    if (mounted) {
+                      setState(() {
+                        // Trigger rebuild to show new name
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Name updated successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to update name: $e'),
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                        ),
+                      );
+                    }
+                  }
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
