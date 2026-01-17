@@ -4,6 +4,7 @@ import 'package:app_usage/app_usage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/homework.dart';
 import '../services/auth_service.dart';
@@ -727,7 +728,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ListTile(
                 leading: const Icon(Icons.info_outline_rounded),
                 title: const Text('About'),
-                subtitle: const Text('LastMinute v1.0.0'),
+                subtitle: FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      final info = snapshot.data!;
+                      return Text(
+                        'LastMinute ${info.version} (${info.buildNumber})',
+                      );
+                    }
+                    return const Text('LastMinute');
+                  },
+                ),
               ),
               const Divider(height: 1),
               ListTile(
