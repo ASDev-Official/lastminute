@@ -23,6 +23,7 @@ class StudyModeService {
   DateTime? _studyStartTime;
   Duration _studyDuration = Duration.zero;
   List<String> _allowedApps = [];
+  Map<String, String> _appDisplayNames = {}; // packageName -> displayName
   String? _lastForegroundApp;
   Function(String)? _onBlockedAppDetected;
   bool _usageAccessRequested = false;
@@ -40,6 +41,7 @@ class StudyModeService {
   Duration get studyDuration => _studyDuration;
   DateTime? get studyStartTime => _studyStartTime;
   List<String> get allowedApps => List.unmodifiable(_allowedApps);
+  Map<String, String> get appDisplayNames => Map.unmodifiable(_appDisplayNames);
 
   static const String _allowedAppsKey = 'study_mode_allowed_apps';
   static const List<String> _systemApps = [
@@ -102,6 +104,21 @@ class StudyModeService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_allowedAppsKey, apps);
       _allowedApps = List.from(apps);
+
+      // Fetch and store display names for these apps
+      try {
+        final installedApps = await InstalledApps.getInstalledApps(
+          excludeSystemApps: false,
+        );
+        for (final app in installedApps) {
+          if (apps.contains(app.packageName)) {
+            _appDisplayNames[app.packageName] = app.name;
+          }
+        }
+      } catch (e) {
+        print('⚠️ Error fetching app display names: $e');
+      }
+
       print('✅ Saved ${apps.length} allowed apps');
     } catch (e) {
       print('❌ ERROR saving allowed apps: $e');
@@ -124,11 +141,12 @@ class StudyModeService {
 
       // Filter out system apps and blocked social media apps
       final filtered = apps.where((app) {
-        final packageName = app.packageName.toLowerCase();
+        final packageName = app.packageName;
+        final lowerPackageName = packageName.toLowerCase();
 
         // Exclude system apps
         final isSystemApp = _systemApps.any(
-          (sys) => packageName.contains(sys.toLowerCase()),
+          (sys) => lowerPackageName.contains(sys.toLowerCase()),
         );
         if (isSystemApp) {
           return false;
@@ -139,6 +157,9 @@ class StudyModeService {
           (blocked) => packageName == blocked,
         );
         if (isBlockedApp) {
+          print(
+            '🚫 Excluding blocked app from selection: ${app.name} ($packageName)',
+          );
           return false;
         }
 
@@ -167,10 +188,14 @@ class StudyModeService {
 
   // Check if an app is allowed
   bool isAppAllowed(String packageName) {
+    print('[isAppAllowed] Checking: $packageName');
     final lowerPackage = packageName.toLowerCase();
 
     // Always allow our app
-    if (lowerPackage.contains('lastminute')) return true;
+    if (lowerPackage.contains('lastminute')) {
+      print('[isAppAllowed] -> ALLOWED (LastMinute app)');
+      return true;
+    }
 
     // Always allow system apps (check if package starts with any system app prefix)
     if (_systemApps.any((sys) {
@@ -178,11 +203,17 @@ class StudyModeService {
       return lowerPackage.startsWith(lowerSys) ||
           lowerPackage.contains(lowerSys);
     })) {
+      print('[isAppAllowed] -> ALLOWED (System app)');
       return true;
     }
 
-    // Check if in allowed list
-    return _allowedApps.contains(packageName);
+    // Check if in allowed list (social media apps are already excluded from selection)
+    print('[isAppAllowed] Checking against allowed list: $_allowedApps');
+    final isInAllowedList = _allowedApps.contains(packageName);
+    print(
+      '[isAppAllowed] -> ${isInAllowedList ? "ALLOWED" : "BLOCKED"} (${isInAllowedList ? "in" : "not in"} allowed list)',
+    );
+    return isInAllowedList;
   }
 
   // Start study session with app monitoring
@@ -299,6 +330,9 @@ class StudyModeService {
         print('✅ Study session completed!');
       });
 
+      // Start foreground service to keep monitoring active
+      await _startForegroundService();
+
       // Start monitoring for blocked apps
       _startAppMonitoring();
 
@@ -319,20 +353,25 @@ class StudyModeService {
 
   // Monitor foreground apps
   void _startAppMonitoring() {
-    print('👀 Starting app monitoring...');
+    print(
+      '👀 [APP_MONITORING] Starting app monitoring with 500ms check interval...',
+    );
 
     _monitorTimer?.cancel();
-    _monitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    _monitorTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      timer,
+    ) async {
       if (!_isSessionActive) {
+        print('⏹️ [APP_MONITORING] Session inactive, stopping monitor');
         timer.cancel();
         return;
       }
 
       try {
         final now = DateTime.now();
-        final oneSecondAgo = now.subtract(const Duration(seconds: 2));
+        final fiveSecondsAgo = now.subtract(const Duration(seconds: 5));
 
-        final usage = await AppUsage().getAppUsage(oneSecondAgo, now);
+        final usage = await AppUsage().getAppUsage(fiveSecondsAgo, now);
 
         if (usage.isNotEmpty) {
           // Get the most recently used app
@@ -341,28 +380,41 @@ class StudyModeService {
           );
 
           final packageName = recentApp.packageName;
+          print(
+            '[CHECK] Current foreground app: $packageName (last: $_lastForegroundApp)',
+          );
 
           // Skip if it's the same app as before
-          if (packageName == _lastForegroundApp) return;
+          if (packageName == _lastForegroundApp) {
+            print('[SKIP] Same app as before');
+            return;
+          }
 
           _lastForegroundApp = packageName;
 
           // Check if app is allowed
           if (!isAppAllowed(packageName)) {
-            print('🚫 Blocked app detected: $packageName');
+            print('🚫 [BLOCKED_APP] Detected: $packageName');
 
-            // Use package name for display (simple name from package)
-            final appName = packageName.split('.').last;
+            // Use display name if available, otherwise package name
+            final appName =
+                _appDisplayNames[packageName] ?? packageName.split('.').last;
+
+            print('🚫 [BLOCKED_APP] Display name: $appName');
 
             // Show blocking overlay
             await _showBlockingOverlay(appName);
 
             // Notify about blocked app
             _onBlockedAppDetected?.call(appName);
+          } else {
+            print('✅ [ALLOWED_APP] App allowed: $packageName');
           }
+        } else {
+          print('[NO_USAGE] No app usage data found');
         }
       } catch (e) {
-        print('❌ ERROR monitoring apps: $e');
+        print('❌ [ERROR] monitoring apps: $e');
       }
     });
   }
@@ -370,19 +422,46 @@ class StudyModeService {
   // Show blocking overlay and bring app to foreground
   Future<void> _showBlockingOverlay(String blockedAppName) async {
     try {
+      print('[PLATFORM] Calling bringToForeground for $blockedAppName...');
       // Bring app to foreground using platform channel
       const platform = MethodChannel('com.lastminute/app_blocker');
       await platform.invokeMethod('bringToForeground');
 
-      print('🔒 Brought LastMinute to foreground, blocking $blockedAppName');
+      print(
+        '🔒 [SUCCESS] Brought LastMinute to foreground, blocked $blockedAppName',
+      );
     } catch (e) {
-      print('❌ ERROR showing blocking overlay: $e');
+      print('❌ [PLATFORM_ERROR] showing blocking overlay: $e');
+    }
+  }
+
+  // Start foreground service to keep monitoring active
+  Future<void> _startForegroundService() async {
+    try {
+      print('[FOREGROUND_SERVICE] Starting foreground service...');
+      const platform = MethodChannel('com.lastminute/app_blocker');
+      await platform.invokeMethod('startForegroundService');
+      print('✅ [FOREGROUND_SERVICE] Foreground service started successfully');
+    } catch (e) {
+      print('⚠️ [FOREGROUND_SERVICE] Could not start foreground service: $e');
+    }
+  }
+
+  // Stop foreground service
+  Future<void> _stopForegroundService() async {
+    try {
+      print('[FOREGROUND_SERVICE] Stopping foreground service...');
+      const platform = MethodChannel('com.lastminute/app_blocker');
+      await platform.invokeMethod('stopForegroundService');
+      print('✅ [FOREGROUND_SERVICE] Foreground service stopped');
+    } catch (e) {
+      print('⚠️ [FOREGROUND_SERVICE] Could not stop foreground service: $e');
     }
   }
 
   // Stop study session
   Future<void> stopStudySession() async {
-    print('🛑 Stopping study session');
+    print('🛑 [SESSION] Stopping study session');
 
     _isStudyModeActive = false;
     _isSessionActive = false;
@@ -395,9 +474,12 @@ class StudyModeService {
     _lastForegroundApp = null;
     _onBlockedAppDetected = null;
 
+    // Stop foreground service
+    await _stopForegroundService();
+
     // Disable wakelock
     WakelockPlus.disable().catchError((e) {
-      print('⚠️ Error disabling wakelock: $e');
+      print('⚠️ [WAKELOCK] Error disabling wakelock: $e');
     });
 
     // Reset usage access flag to allow requesting again in future sessions

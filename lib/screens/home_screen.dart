@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_usage/app_usage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +9,7 @@ import '../models/homework.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/github_service.dart';
+import '../services/study_mode_service.dart';
 import '../widgets/github_commit_card.dart';
 import '../widgets/homework_card.dart';
 import '../widgets/stats_card.dart';
@@ -33,9 +37,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final FirestoreService _firestoreService = FirestoreService();
+  final StudyModeService _studyModeService = StudyModeService();
   int _selectedIndex = 0;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+  Timer? _appMonitoringTimer;
+  String? _lastForegroundApp;
 
   @override
   void initState() {
@@ -48,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
     _fadeController.forward();
+    _startAppMonitoring();
   }
 
   @override
@@ -59,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _appMonitoringTimer?.cancel();
     _fadeController.dispose();
     super.dispose();
   }
@@ -71,6 +80,73 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
       _fadeController.forward();
     }
+  }
+
+  void _startAppMonitoring() {
+    print('[HOME_SCREEN] Starting app monitoring with 500ms check interval...');
+    _appMonitoringTimer?.cancel();
+    _appMonitoringTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      timer,
+    ) async {
+      if (!mounted || !_studyModeService.isSessionActive) {
+        print('[HOME_SCREEN] Monitor timer cancelled');
+        timer.cancel();
+        return;
+      }
+
+      try {
+        final now = DateTime.now();
+        final fiveSecondsAgo = now.subtract(const Duration(seconds: 5));
+
+        final usage = await AppUsage().getAppUsage(fiveSecondsAgo, now);
+
+        if (usage.isNotEmpty) {
+          // Get the most recently used app
+          final recentApp = usage.reduce(
+            (a, b) => a.endDate.isAfter(b.endDate) ? a : b,
+          );
+
+          final packageName = recentApp.packageName;
+          print(
+            '[HOME_SCREEN] Current foreground: $packageName (last: $_lastForegroundApp)',
+          );
+
+          // Skip if it's the same app as before or if it's LastMinute
+          if (packageName == _lastForegroundApp ||
+              packageName == 'com.lastminute' ||
+              packageName.startsWith('com.lastminute.')) {
+            print('[HOME_SCREEN] Skipping (same app or LastMinute)');
+            return;
+          }
+
+          _lastForegroundApp = packageName;
+
+          // Check if app is disallowed
+          if (!_studyModeService.isAppAllowed(packageName)) {
+            // Use display name if available, otherwise package name
+            final appNames = _studyModeService.appDisplayNames;
+            final appName =
+                appNames[packageName] ?? packageName.split('.').last;
+
+            print(
+              '🚫 [HOME_SCREEN] Blocked app detected: $packageName ($appName)',
+            );
+
+            // Navigate back to launcher
+            if (mounted) {
+              print('[HOME_SCREEN] Navigating back to launcher...');
+              Navigator.pop(context);
+            }
+          } else {
+            print('✅ [HOME_SCREEN] App allowed: $packageName');
+          }
+        } else {
+          print('[HOME_SCREEN] No usage data found');
+        }
+      } catch (e) {
+        print('❌ [HOME_SCREEN] Error monitoring apps: $e');
+      }
+    });
   }
 
   Future<void> _returnToLauncher() async {

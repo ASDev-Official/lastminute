@@ -169,7 +169,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
   }
 
   Future<void> _startStudySession() async {
+    print('[LAUNCHER] Starting study session setup...');
     if (_allowedApps.isEmpty) {
+      print('[LAUNCHER] ERROR: No allowed apps selected');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select at least one allowed app first'),
@@ -180,10 +182,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
 
     final minutes = _customMinutes ?? _selectedMinutes;
+    print(
+      '[LAUNCHER] Starting session for $minutes minutes with ${_allowedApps.length} allowed apps',
+    );
 
     await _studyModeService.startStudySession(
       duration: Duration(minutes: minutes),
       onBlockedAppDetected: (appName) {
+        print('[LAUNCHER] Blocked app callback: $appName');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -196,6 +202,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
         }
       },
       onComplete: () {
+        print('[LAUNCHER] Session completed callback');
         if (mounted) {
           showDialog(
             context: context,
@@ -329,6 +336,7 @@ class _LauncherHomeScreen extends StatefulWidget {
 
 class _LauncherHomeScreenState extends State<_LauncherHomeScreen> {
   late PageController _pageController;
+  final StudyModeService _studyModeService = StudyModeService();
 
   @override
   void initState() {
@@ -490,9 +498,12 @@ class _LauncherHomeScreenState extends State<_LauncherHomeScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: widget.allowedApps.map((packageName) {
+                    final displayName =
+                        _studyModeService.appDisplayNames[packageName] ??
+                        packageName.split('.').last;
                     return Chip(
                       avatar: const Icon(Icons.app_shortcut, size: 16),
-                      label: Text(packageName.split('.').last),
+                      label: Text(displayName),
                     );
                   }).toList(),
                 ),
