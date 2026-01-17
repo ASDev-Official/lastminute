@@ -36,6 +36,49 @@ class AuthService {
     }
   }
 
+  Future<UserCredential> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      return await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    } catch (e, stackTrace) {
+      print('❌ ERROR during Email/Password Sign-In: $e');
+      print('📋 Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<UserCredential> createUserWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      return await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    } catch (e, stackTrace) {
+      print('❌ ERROR during Email/Password Registration: $e');
+      print('📋 Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      print('✅ Password reset email sent to $email');
+    } catch (e, stackTrace) {
+      print('❌ ERROR sending password reset email: $e');
+      print('📋 Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
   Future<void> signOut() async {
     try {
       print('🔄 Starting sign out process...');
