@@ -216,4 +216,4 @@ Built with ❤️ for students who need that extra reminder!
 
 ---
 
-**LastMinute** - Stay organized, stay ahead! 🎓✨
+**LastMinute** - Because deadlines always sneak up. 🎓✨

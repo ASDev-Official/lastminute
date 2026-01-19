@@ -1,11 +1,9 @@
 {
-  "name": "lastminute",
-  "short_name": "lastminute",
+  "name": "LastMinute",
+  "short_name": "LastMinute",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0175C2",
-  "theme_color": "#0175C2",
-  "description": "A new Flutter project.",
+  "description": "Because Deadlines Always Sneak Up.",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [

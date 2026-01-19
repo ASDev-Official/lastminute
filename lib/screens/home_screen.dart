@@ -17,6 +17,7 @@ import '../widgets/stats_card.dart';
 import 'calendar_screen.dart';
 import 'homework_detail_screen.dart';
 import 'launcher_screen.dart';
+import 'licenses_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -242,9 +243,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   label: Text('Home'),
                 ),
                 NavigationRailDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: Text('Profile'),
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings_rounded),
+                  label: Text('Settings'),
                 ),
               ],
             ),
@@ -256,11 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   AppBar(
                     title: Row(
                       children: [
-                        Icon(
-                          Icons.schedule,
-                          color: colorScheme.primary,
-                          size: 28,
-                        ),
+                        Icon(Icons.alarm, color: colorScheme.primary, size: 28),
                         const SizedBox(width: 8),
                         const Flexible(
                           child: Text(
@@ -378,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         appBar: AppBar(
           title: Row(
             children: [
-              Icon(Icons.schedule, color: colorScheme.primary, size: 28),
+              Icon(Icons.alarm, color: colorScheme.primary, size: 28),
               const SizedBox(width: 8),
               const Flexible(
                 child: Text(
@@ -565,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Stay on top of your homework',
+                        'Because deadlines always sneak up. Here\'s your homework overview:',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -825,6 +822,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 leading: const Icon(Icons.description_outlined),
                 title: const Text('Because Deadlines Always Sneak Up'),
                 subtitle: const Text('Stay organized with homework reminders'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.gavel_outlined),
+                title: const Text('Licenses'),
+                subtitle: const Text('View open source licenses'),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const LicensesScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
