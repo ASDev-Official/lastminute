@@ -103847,7 +103847,7 @@ if(n==null)n=a
 else{j=A.n(a0).ax
 i=j.rx
 n=n.b_(i==null?j.k3:i)}j=t.p
-n=A.b([new A.pO(new A.ar(B.bO,A.bk(A.b([k,B.f4,A.a7("Stay on top of your homework",a,a,a,n,a,a,a),B.al,new A.W2(q.d,a)],j),B.ad,B.m,B.o,0,B.w),a),a)],j)
+n=A.b([new A.pO(new A.ar(B.bO,A.bk(A.b([k,B.f4,A.a7("Because deadlines always sneak up. Here's your homework overview:",a,a,a,n,a,a,a),B.al,new A.W2(q.d,a)],j),B.ad,B.m,B.o,0,B.w),a),a)],j)
 if(m.length!==0){k=A.dG(B.qN,A.n(a0).ax.fy,a,20)
 i=m.length
 h=A.n(a0).ok.w
