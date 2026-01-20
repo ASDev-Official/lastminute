@@ -9089,7 +9089,7 @@ s=new A.Rd(new A.bl(new A.au(s,t.c),t.h),null)
 $.cP().n(0,s,r)
 return s},
 b5s(a){var s,r,q
-$.adi.n(0,"flutter-fire-auth","6.1.3")
+$.adi.n(0,"flutter-fire-auth","6.1.4")
 A.aTB("auth",new A.ad7())
 s=A.aTA()
 A.cf(s,$.Ot(),!0)
@@ -50662,13 +50662,13 @@ for(;;)switch(s){case 0:k=v.G
 if(k.firebase_core!=null){s=1
 break}o=A.ap(k.flutterfire_web_sdk_version)
 if(o==null)o=null
-n=o==null?"12.3.0":o
+n=o==null?"12.7.0":o
 m=p.gamd()
 k=$.a6X()
 l=A.k(k).i("bd<2>")
 s=3
 return A.x(A.j7(A.kb(new A.bd(k,l),new A.adh(p,m,n),l.i("E.E"),t.uz),t.H),$async$B2)
-case 3:$.adi.n(0,"flutter-fire-core","4.3.0")
+case 3:$.adi.n(0,"flutter-fire-core","4.4.0")
 $.adi.ap(0,A.beS())
 case 1:return A.t(q,r)}})
 return A.u($async$B2,r)},
@@ -108551,7 +108551,7 @@ $0(){return A.a6S()},
 $S:0}
 A.aMq.prototype={
 $0(){var s,r,q,p,o=null,n=$.b2N()
-$.adi.n(0,"flutter-fire-fst","6.1.1")
+$.adi.n(0,"flutter-fire-fst","6.1.2")
 A.aTB("firestore",o)
 s=A.aTD(o,o)
 A.cf(s,$.aMP(),!0)
