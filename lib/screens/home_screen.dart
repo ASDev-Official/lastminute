@@ -14,6 +14,7 @@ import '../services/study_mode_service.dart';
 import '../widgets/github_commit_card.dart';
 import '../widgets/homework_card.dart';
 import '../widgets/stats_card.dart';
+import '../widgets/desktop_home_pane.dart';
 import 'calendar_screen.dart';
 import 'homework_detail_screen.dart';
 import 'launcher_screen.dart';
@@ -269,29 +270,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ],
                     ),
                     actions: [
-                      if (widget.showLauncherButton)
-                        IconButton(
-                          tooltip: 'Return to Launcher',
-                          onPressed: _returnToLauncher,
-                          icon: const Icon(Icons.home_rounded),
-                        ),
-                      IconButton(
-                        tooltip: 'Calendar',
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CalendarScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.calendar_today_rounded),
-                      ),
-                      IconButton(
-                        tooltip: 'Focus Mode',
-                        onPressed: _openFocusMode,
-                        icon: const Icon(Icons.psychology_rounded),
-                      ),
                       PopupMenuButton<int>(
                         icon: CircleAvatar(
                           radius: 16,
@@ -546,6 +524,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           final overdue = incomplete.where((h) => h.isOverdue).toList();
           final upcoming = incomplete.where((h) => !h.isOverdue).toList();
+
+          final isWide = MediaQuery.of(context).size.width >= 1000;
+          if (isWide) {
+            return DesktopHomePane(
+              greetingName: widget.user.displayName?.split(' ').first,
+              firestoreService: _firestoreService,
+              overdue: overdue,
+              upcoming: upcoming,
+              completed: completed,
+              allHomework: allHomework,
+              onAddHomework: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const HomeworkDetailScreen(),
+                  ),
+                );
+              },
+              onOpenCalendar: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CalendarScreen()),
+                );
+              },
+            );
+          }
 
           return CustomScrollView(
             slivers: [
