@@ -31,12 +31,14 @@ class HomeScreen extends StatefulWidget {
     required this.authService,
     required this.githubService,
     this.showLauncherButton = false,
+    this.isReadOnly = false,
   });
 
   final User user;
   final AuthService authService;
   final GithubService githubService;
   final bool showLauncherButton;
+  final bool isReadOnly;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -337,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ],
         ),
-        floatingActionButton: _selectedIndex == 0
+        floatingActionButton: _selectedIndex == 0 && !widget.isReadOnly
             ? FloatingActionButton.extended(
                 onPressed: () {
                   Navigator.push(
@@ -441,7 +443,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           opacity: _fadeAnimation,
           child: _selectedIndex == 0 ? _buildHomeTab() : _buildProfileTab(),
         ),
-        floatingActionButton: _selectedIndex == 0
+        floatingActionButton: _selectedIndex == 0 && !widget.isReadOnly
             ? FloatingActionButton.extended(
                 onPressed: () {
                   Navigator.push(

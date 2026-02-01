@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'firebase_options.dart';
+import 'models/maintenance.dart';
 import 'screens/home_screen.dart';
 import 'screens/launcher_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/github_service.dart';
+import 'services/maintenance_service.dart';
 import 'services/notification_scheduler_service.dart';
 import 'services/notification_service.dart';
 import 'theme.dart';
+import 'widgets/maintenance_widgets.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -104,6 +107,7 @@ class _AuthGate extends StatelessWidget {
     final githubService = GithubService();
     final firestoreService = FirestoreService();
     final notificationScheduler = NotificationSchedulerService();
+    final maintenanceService = MaintenanceService();
 
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
@@ -125,10 +129,36 @@ class _AuthGate extends StatelessWidget {
         // Start watching for homework changes and sync reminders
         _initializeReminders(notificationScheduler);
 
-        return HomeScreen(
-          user: user,
-          authService: authService,
-          githubService: githubService,
+        // Check maintenance status
+        return StreamBuilder(
+          stream: maintenanceService.getMaintenanceStream(),
+          builder: (context, snapshot) {
+            final maintenance = snapshot.data;
+
+            // If maintenance is ongoing, show full-screen notice and read-only mode
+            if (maintenance != null && maintenance.isOngoing) {
+              return _MaintenanceReadOnlyWrapper(
+                maintenance: maintenance,
+                child: HomeScreen(
+                  user: user,
+                  authService: authService,
+                  githubService: githubService,
+                  isReadOnly: true,
+                ),
+              );
+            }
+
+            // If maintenance is scheduled, show dialog on top of home screen
+            return _MaintenanceDialogWrapper(
+              maintenance: maintenance,
+              child: HomeScreen(
+                user: user,
+                authService: authService,
+                githubService: githubService,
+                isReadOnly: false,
+              ),
+            );
+          },
         );
       },
     );
@@ -151,5 +181,87 @@ class _AuthGate extends StatelessWidget {
     scheduler.syncRemindersForAllHomework().catchError((e) {
       print('Error syncing reminders (non-critical): $e');
     });
+  }
+}
+
+/// Wrapper for scheduled maintenance - shows dialog when maintenance is scheduled
+class _MaintenanceDialogWrapper extends StatefulWidget {
+  const _MaintenanceDialogWrapper({
+    required this.maintenance,
+    required this.child,
+  });
+
+  final Widget child;
+  final Maintenance? maintenance;
+
+  @override
+  State<_MaintenanceDialogWrapper> createState() =>
+      _MaintenanceDialogWrapperState();
+}
+
+class _MaintenanceDialogWrapperState extends State<_MaintenanceDialogWrapper> {
+  late Set<String> _dismissedMaintenanceIds;
+  bool _showingMaintenance = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _dismissedMaintenanceIds = {};
+    _showMaintenanceIfNeeded();
+  }
+
+  void _showMaintenanceIfNeeded() {
+    if (widget.maintenance != null &&
+        widget.maintenance!.isScheduled &&
+        !_dismissedMaintenanceIds.contains(widget.maintenance!.id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() => _showingMaintenance = true);
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(_MaintenanceDialogWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _showMaintenanceIfNeeded();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showingMaintenance && widget.maintenance != null) {
+      return ScheduledMaintenanceScreen(
+        maintenance: widget.maintenance!,
+        onDismiss: () {
+          setState(() {
+            _dismissedMaintenanceIds.add(widget.maintenance!.id);
+            _showingMaintenance = false;
+          });
+        },
+      );
+    }
+    return widget.child;
+  }
+}
+
+/// Wrapper for ongoing maintenance - replaces content with read-only notice
+class _MaintenanceReadOnlyWrapper extends StatefulWidget {
+  const _MaintenanceReadOnlyWrapper({
+    required this.maintenance,
+    required this.child,
+  });
+
+  final Widget child;
+  final Maintenance maintenance;
+
+  @override
+  State<_MaintenanceReadOnlyWrapper> createState() =>
+      _MaintenanceReadOnlyWrapperState();
+}
+
+class _MaintenanceReadOnlyWrapperState
+    extends State<_MaintenanceReadOnlyWrapper> {
+  @override
+  Widget build(BuildContext context) {
+    return OngoingMaintenanceScreen(maintenance: widget.maintenance);
   }
 }
