@@ -10,6 +10,7 @@ import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/github_service.dart';
+import 'services/notification_scheduler_service.dart';
 import 'services/notification_service.dart';
 import 'theme.dart';
 
@@ -102,6 +103,7 @@ class _AuthGate extends StatelessWidget {
     final authService = AuthService();
     final githubService = GithubService();
     final firestoreService = FirestoreService();
+    final notificationScheduler = NotificationSchedulerService();
 
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
@@ -120,6 +122,9 @@ class _AuthGate extends StatelessWidget {
         // Run migration when user logs in
         _runMigration(firestoreService);
 
+        // Start watching for homework changes and sync reminders
+        _initializeReminders(notificationScheduler);
+
         return HomeScreen(
           user: user,
           authService: authService,
@@ -133,6 +138,18 @@ class _AuthGate extends StatelessWidget {
     // Run migration in background
     firestoreService.migrateSubjectsToOptions().catchError((e) {
       print('Migration error (non-critical): $e');
+    });
+  }
+
+  void _initializeReminders(NotificationSchedulerService scheduler) {
+    // Start listening to homework changes for real-time reminder scheduling
+    scheduler.startWatchingHomework().catchError((e) {
+      print('Error starting homework listener (non-critical): $e');
+    });
+
+    // Sync reminders for all homework on startup
+    scheduler.syncRemindersForAllHomework().catchError((e) {
+      print('Error syncing reminders (non-critical): $e');
     });
   }
 }

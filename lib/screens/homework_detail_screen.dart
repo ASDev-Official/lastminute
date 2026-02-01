@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/homework.dart';
 import '../models/subject_option.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_scheduler_service.dart';
 import '../services/notification_service.dart';
 import 'subjects_screen.dart';
 
@@ -29,6 +30,8 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
   final List<DateTime> _reminders = [];
 
   final FirestoreService _firestoreService = FirestoreService();
+  final NotificationSchedulerService _notificationScheduler =
+      NotificationSchedulerService();
   final NotificationService _notificationService = NotificationService();
   bool _isLoading = false;
 
@@ -111,6 +114,12 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
         await _notificationService.cancelHomeworkReminders(homework.id);
       }
 
+      // Also sync through the scheduler for consistency
+      await _notificationScheduler
+          .syncRemindersForHomework(homework)
+          .catchError((e) {
+            print('⚠️ Warning syncing reminders: $e');
+          });
       // Schedule notifications with the correct homework ID
       await _notificationService.scheduleHomeworkReminder(homework);
 
