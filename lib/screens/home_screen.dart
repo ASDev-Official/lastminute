@@ -13,6 +13,7 @@ import '../services/firestore_service.dart';
 import '../services/github_service.dart';
 import '../services/notification_service.dart';
 import '../services/study_mode_service.dart';
+import '../utils/homework_grouper.dart';
 import '../widgets/github_commit_card.dart';
 import '../widgets/homework_card.dart';
 import '../widgets/stats_card.dart';
@@ -21,6 +22,7 @@ import 'calendar_screen.dart';
 import 'homework_detail_screen.dart';
 import 'launcher_screen.dart';
 import 'licenses_screen.dart';
+import 'subjects_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -49,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _appMonitoringTimer;
   String? _lastForegroundApp;
   bool _completedExpanded = false;
+  String? _selectedSubjectFilter;
 
   @override
   void initState() {
@@ -516,24 +519,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
 
           final allHomework = snapshot.data ?? [];
-          final incomplete = allHomework.where((h) => !h.isCompleted).toList();
-          final completed = allHomework.where((h) => h.isCompleted).toList()
-            ..sort(
-              (a, b) => (b.completedAt ?? b.dueDate).compareTo(
-                a.completedAt ?? a.dueDate,
-              ),
-            );
 
-          final overdue = incomplete.where((h) => h.isOverdue).toList();
-          final upcoming = incomplete.where((h) => !h.isOverdue).toList();
+          // Get all unique subjects for filter
+          final allSubjects = HomeworkGrouper.getUniqueSubjects(allHomework);
+
+          // Apply subject filter
+          final filteredHomework = HomeworkGrouper.filterBySubject(
+            allHomework,
+            _selectedSubjectFilter,
+          );
+
+          // Separate completed and incomplete
+          final completed =
+              filteredHomework.where((h) => h.isCompleted).toList()..sort(
+                (a, b) => (b.completedAt ?? b.dueDate).compareTo(
+                  a.completedAt ?? a.dueDate,
+                ),
+              );
+
+          final incomplete = filteredHomework
+              .where((h) => !h.isCompleted)
+              .toList();
+
+          // Group incomplete by deadline
+          final groupedByDeadline = HomeworkGrouper.groupByDeadline(incomplete);
 
           final isWide = MediaQuery.of(context).size.width >= 1000;
           if (isWide) {
             return DesktopHomePane(
               greetingName: widget.user.displayName?.split(' ').first,
               firestoreService: _firestoreService,
-              overdue: overdue,
-              upcoming: upcoming,
+              overdue: incomplete.where((h) => h.isOverdue).toList(),
+              upcoming: incomplete.where((h) => !h.isOverdue).toList(),
               completed: completed,
               allHomework: allHomework,
               onAddHomework: () {
@@ -579,64 +596,91 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              if (overdue.isNotEmpty) ...[
+              // Subject Filter Chips
+              if (allSubjects.isNotEmpty)
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                   sliver: SliverToBoxAdapter(
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.warning_rounded,
-                          color: Theme.of(context).colorScheme.error,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Overdue (${overdue.length})',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.error,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            label: const Text('All'),
+                            selected: _selectedSubjectFilter == null,
+                            onSelected: (selected) {
+                              setState(
+                                () => _selectedSubjectFilter = selected
+                                    ? null
+                                    : _selectedSubjectFilter,
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ...allSubjects.map((subject) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(subject),
+                                selected: _selectedSubjectFilter == subject,
+                                onSelected: (selected) {
+                                  setState(
+                                    () => _selectedSubjectFilter = selected
+                                        ? subject
+                                        : null,
+                                  );
+                                },
                               ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          HomeworkCard(homework: overdue[index]),
-                      childCount: overdue.length,
-                    ),
-                  ),
-                ),
-              ],
-              if (upcoming.isNotEmpty) ...[
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  sliver: SliverToBoxAdapter(
-                    child: Text(
-                      'Upcoming (${upcoming.length})',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                            );
+                          }),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+              // Deadline Groups
+              ...DeadlineGroup.values.map((group) {
+                final homeworkInGroup = groupedByDeadline[group] ?? [];
+                if (homeworkInGroup.isEmpty) {
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          HomeworkCard(homework: upcoming[index]),
-                      childCount: upcoming.length,
-                    ),
+                    delegate: SliverChildListDelegate([
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _getIconForGroup(group),
+                              color: _getColorForGroup(context, group),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${group.label} (${homeworkInGroup.length})',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: _getColorForGroup(context, group),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ...homeworkInGroup.map(
+                        (hw) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: HomeworkCard(homework: hw),
+                        ),
+                      ),
+                    ]),
                   ),
-                ),
-              ],
+                );
+              }),
+              // Completed Section
               if (completed.isNotEmpty)
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -656,7 +700,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         child: ExpansionTile(
                           initiallyExpanded: _completedExpanded,
                           onExpansionChanged: (expanded) {
-                            // Track state without triggering a full rebuild to avoid refresh flashes.
                             _completedExpanded = expanded;
                           },
                           leading: Container(
@@ -707,7 +750,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-              if (allHomework.isEmpty)
+              // Empty State
+              if (filteredHomework.isEmpty)
                 SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -722,7 +766,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'No homework yet!',
+                          _selectedSubjectFilter != null
+                              ? 'No homework for this subject'
+                              : 'No homework yet!',
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
@@ -746,6 +792,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         },
       ),
     );
+  }
+
+  IconData _getIconForGroup(DeadlineGroup group) {
+    switch (group) {
+      case DeadlineGroup.under7days:
+        return Icons.emergency_rounded;
+      case DeadlineGroup.under14days:
+        return Icons.warning_rounded;
+      case DeadlineGroup.under30days:
+        return Icons.schedule_rounded;
+      case DeadlineGroup.above30days:
+        return Icons.hourglass_bottom_rounded;
+    }
+  }
+
+  Color _getColorForGroup(BuildContext context, DeadlineGroup group) {
+    switch (group) {
+      case DeadlineGroup.under7days:
+        return Theme.of(context).colorScheme.error;
+      case DeadlineGroup.under14days:
+        return Theme.of(context).colorScheme.errorContainer;
+      case DeadlineGroup.under30days:
+        return Theme.of(context).colorScheme.tertiary;
+      case DeadlineGroup.above30days:
+        return Theme.of(context).colorScheme.primary;
+    }
   }
 
   Widget _buildProfileTab() {
@@ -803,6 +875,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 16),
         GithubCommitCard(githubService: widget.githubService),
+        const SizedBox(height: 16),
+        // Manage Subjects
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.bookmark_outline),
+            title: const Text('Manage Subjects'),
+            subtitle: const Text('Create and manage homework subjects'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SubjectsScreen()),
+              );
+            },
+          ),
+        ),
         const SizedBox(height: 16),
         // Debug Mode: Test Notification Button
         if (kDebugMode)

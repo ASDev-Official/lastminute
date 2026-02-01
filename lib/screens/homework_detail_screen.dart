@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/homework.dart';
+import '../models/subject_option.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import 'subjects_screen.dart';
 
 class HomeworkDetailScreen extends StatefulWidget {
   const HomeworkDetailScreen({super.key, this.homework});
@@ -19,7 +21,7 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _subjectController = TextEditingController();
+  String? _selectedSubject;
 
   late DateTime _dueDate;
   late TimeOfDay _dueTime;
@@ -36,7 +38,7 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
     if (widget.homework != null) {
       _titleController.text = widget.homework!.title;
       _descriptionController.text = widget.homework!.description ?? '';
-      _subjectController.text = widget.homework!.subject ?? '';
+      _selectedSubject = widget.homework!.subject;
       _dueDate = widget.homework!.dueDate;
       _dueTime = TimeOfDay.fromDateTime(widget.homework!.dueDate);
       _priority = widget.homework!.priority;
@@ -51,7 +53,6 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _subjectController.dispose();
     super.dispose();
   }
 
@@ -75,9 +76,9 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
       description: _descriptionController.text.trim().isEmpty
           ? null
           : _descriptionController.text.trim(),
-      subject: _subjectController.text.trim().isEmpty
+      subject: _selectedSubject?.trim().isEmpty == true
           ? null
-          : _subjectController.text.trim(),
+          : _selectedSubject?.trim(),
       dueDate: combinedDueDate,
       priority: _priority,
       isCompleted: widget.homework?.isCompleted ?? false,
@@ -220,17 +221,55 @@ class _HomeworkDetailScreenState extends State<HomeworkDetailScreen> {
               textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 16),
-            // Subject
-            TextFormField(
-              controller: _subjectController,
-              decoration: InputDecoration(
-                labelText: 'Subject (optional)',
-                hintText: 'Mathematics, Science, etc.',
-                prefixIcon: const Icon(Icons.book_outlined),
-                filled: true,
-                fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
-              ),
-              textCapitalization: TextCapitalization.words,
+            // Subject Dropdown
+            StreamBuilder<List<SubjectOption>>(
+              stream: _firestoreService.getSubjectOptionsStream(),
+              builder: (context, snapshot) {
+                final subjects = snapshot.data ?? [];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: _selectedSubject,
+                      decoration: InputDecoration(
+                        labelText: 'Subject (optional)',
+                        hintText: 'Select or create a subject',
+                        prefixIcon: const Icon(Icons.book_outlined),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest
+                            .withOpacity(0.3),
+                      ),
+                      items: [
+                        ...subjects.map((subject) {
+                          return DropdownMenuItem(
+                            value: subject.name,
+                            child: Text(subject.name),
+                          );
+                        }),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedSubject = value);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SubjectsScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Manage Subjects'),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
             // Description

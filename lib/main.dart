@@ -8,6 +8,7 @@ import 'screens/home_screen.dart';
 import 'screens/launcher_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
+import 'services/firestore_service.dart';
 import 'services/github_service.dart';
 import 'services/notification_service.dart';
 import 'theme.dart';
@@ -100,6 +101,7 @@ class _AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = AuthService();
     final githubService = GithubService();
+    final firestoreService = FirestoreService();
 
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
@@ -115,6 +117,9 @@ class _AuthGate extends StatelessWidget {
           return LoginScreen(authService: authService);
         }
 
+        // Run migration when user logs in
+        _runMigration(firestoreService);
+
         return HomeScreen(
           user: user,
           authService: authService,
@@ -122,5 +127,12 @@ class _AuthGate extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _runMigration(FirestoreService firestoreService) {
+    // Run migration in background
+    firestoreService.migrateSubjectsToOptions().catchError((e) {
+      print('Migration error (non-critical): $e');
+    });
   }
 }
